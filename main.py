@@ -12,21 +12,21 @@ load_dotenv()
 # Local imports
 from api import (
     get_drama_detail, get_all_episodes, get_latest_dramas,
-    get_latest_idramas, get_idrama_detail, get_idrama_all_episodes
+    get_home_dramas, search_dramas
 )
 from downloader import download_all_episodes
 from merge import merge_episodes
 from uploader import upload_drama
 
-# Configuration (Use environment variables or replace these directly)
+# Configuration
 API_ID = int(os.environ.get("API_ID", "0"))
 API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
-AUTO_CHANNEL = int(os.environ.get("AUTO_CHANNEL", ADMIN_ID)) # Default post to admin
+AUTO_CHANNEL = int(os.environ.get("AUTO_CHANNEL", ADMIN_ID))
 PROCESSED_FILE = "processed.json"
 
-# Initialize state
+# ... rest of the state management remains same ...
 def load_processed():
     if os.path.exists(PROCESSED_FILE):
         import json
@@ -51,7 +51,7 @@ class BotState:
     is_processing = False
 
 # Initialize client
-client = TelegramClient('dramabox_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('dramabite_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 def get_panel_buttons():
     status_text = "🟢 RUNNING" if BotState.is_auto_running else "🔴 STOPPED"
@@ -60,6 +60,7 @@ def get_panel_buttons():
         [Button.inline(f"📊 Status: {status_text}", b"status")]
     ]
 
+# ... Panel handlers are ok ...
 @client.on(events.NewMessage(pattern='/update'))
 async def update_bot(event):
     if event.sender_id != ADMIN_ID:
@@ -73,7 +74,7 @@ async def update_bot(event):
         result = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True)
         await status_msg.edit(f"✅ Repositori berhasil di-pull:\n```\n{result.stdout}\n```\n\nSedang memulai ulang sistem (Restarting)...")
         
-        # Restart the script forcefully replacing the current process image
+        # Restart the script
         os.execl(sys.executable, sys.executable, *sys.argv)
     except Exception as e:
         await status_msg.edit(f"❌ Gagal melakukan update: {e}")
@@ -82,53 +83,47 @@ async def update_bot(event):
 async def panel(event):
     if event.chat_id != ADMIN_ID:
         return
-    await event.reply("🎛 **Dramabox Control Panel**", buttons=get_panel_buttons())
+    await event.reply("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
 
 @client.on(events.CallbackQuery())
 async def panel_callback(event):
     if event.sender_id != ADMIN_ID:
         return
-        
     data = event.data
-    
     try:
         if data == b"start_auto":
             BotState.is_auto_running = True
             await event.answer("Auto-mode started!")
-            await event.edit("🎛 **Dramabox Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
         elif data == b"stop_auto":
             BotState.is_auto_running = False
             await event.answer("Auto-mode stopped!")
-            await event.edit("🎛 **Dramabox Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
         elif data == b"status":
             await event.answer(f"Status: {'Running' if BotState.is_auto_running else 'Stopped'}")
-            await event.edit("🎛 **Dramabox Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
     except Exception as e:
         if "message is not modified" in str(e).lower() or "Message string and reply markup" in str(e):
-            pass # Ignore if button is already in that state
+            pass
         else:
             logger.error(f"Callback error: {e}")
 
 @client.on(events.NewMessage(pattern='/start'))
 async def start(event):
-    await event.reply("Welcome to Dramabox Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
+    await event.reply("Welcome to DramaBite Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
 
 @client.on(events.NewMessage(pattern=r'/download (\d+)'))
 async def on_download(event):
     chat_id = event.chat_id
-    
-    # Check admin
     if chat_id != ADMIN_ID:
         await event.reply("❌ Maaf, perintah ini hanya untuk admin.")
         return
-        
     if BotState.is_processing:
-        await event.reply("⚠️ Sedang memproses drama lain. Tunggu hingga selesai (Anti bentrok).")
+        await event.reply("⚠️ Sedang memproses drama lain. Tunggu hingga selesai.")
         return
-        
     book_id = event.pattern_match.group(1)
     
-    # 1. Fetch data
+    # Check detail
     detail = await get_drama_detail(book_id)
     if not detail:
         await event.reply(f"❌ Gagal mendapatkan detail drama `{book_id}`.")
@@ -138,11 +133,9 @@ async def on_download(event):
     if not episodes:
         await event.reply(f"❌ Drama `{book_id}` tidak memiliki episode.")
         return
-    title = detail.get("title") or detail.get("bookName") or detail.get("name") or f"Drama_{book_id}"
-    description = detail.get("intro") or detail.get("introduction") or detail.get("description") or "No description available."
-    poster = detail.get("cover") or detail.get("coverWap") or detail.get("poster") or "" # URL for poster
-    
-    status_msg = await event.reply(f"🎬 Drama: **{title}**\n📽 Total Episodes: {len(episodes)}\n\n⏳ Sedang mendownload dan memproses...")
+        
+    title = detail.get("title") or detail.get("name") or f"Drama_{book_id}"
+    status_msg = await event.reply(f"🎬 Drama: **{title}**\n📽 Total Episodes: {len(episodes)}\n\n⏳ Sedang mendownload...")
     
     BotState.is_processing = True
     processed_ids.add(book_id)
@@ -151,49 +144,42 @@ async def on_download(event):
     await process_drama_full(book_id, chat_id, status_msg)
     BotState.is_processing = False
 
-async def process_drama_full(book_id, chat_id, status_msg=None, source="microdrama"):
-    """Refactored logic to be reusable for auto-mode and support multiple API sources."""
-    if source == "idrama":
-        detail = await get_idrama_detail(book_id)
-        episodes = await get_idrama_all_episodes(book_id)
-    else:
-        detail = await get_drama_detail(book_id)
-        episodes = await get_all_episodes(book_id)
+async def process_drama_full(book_id, chat_id, status_msg=None):
+    """DramaBite specific processing logic."""
+    detail = await get_drama_detail(book_id)
+    episodes = await get_all_episodes(book_id)
     
     if not detail or not episodes:
-        if status_msg: await status_msg.edit(f"❌ Detail atau Episode `{book_id}` ({source}) tidak ditemukan.")
+        if status_msg: await status_msg.edit(f"❌ Detail atau Episode `{book_id}` tidak ditemukan.")
         return False
 
-    title = detail.get("title") or detail.get("bookName") or detail.get("name") or f"Drama_{book_id}"
-    description = detail.get("intro") or detail.get("introduction") or detail.get("description") or "No description available."
-    poster = detail.get("cover") or detail.get("coverWap") or detail.get("poster") or ""
+    title = detail.get("title") or detail.get("name") or f"Drama_{book_id}"
+    description = detail.get("desc") or detail.get("description") or "No description available."
+    poster = detail.get("cover") or detail.get("poster") or ""
     
-    # 2. Setup temp directory
-    temp_dir = tempfile.mkdtemp(prefix=f"dramabox_{book_id}_")
+    temp_dir = tempfile.mkdtemp(prefix=f"dramabite_{book_id}_")
     video_dir = os.path.join(temp_dir, "episodes")
     os.makedirs(video_dir, exist_ok=True)
     
     try:
         if status_msg: await status_msg.edit(f"🎬 Processing **{title}**...")
         
-        # 3. Download
+        # Download (Now handles m3u8 in downloader.py)
         success = await download_all_episodes(episodes, video_dir)
         if not success:
             if status_msg: await status_msg.edit("❌ Download Gagal.")
             return False
 
-        # 4. Merge
+        # Merge
         output_video_path = os.path.join(temp_dir, f"{title}.mp4")
         merge_success = merge_episodes(video_dir, output_video_path)
         if not merge_success:
             if status_msg: await status_msg.edit("❌ Merge Gagal.")
             return False
 
-        # 5. Upload
+        # Upload
         upload_success = await upload_drama(
-            client, chat_id, 
-            title, description, 
-            poster, output_video_path
+            client, chat_id, title, description, poster, output_video_path
         )
         
         if upload_success:
@@ -202,7 +188,6 @@ async def process_drama_full(book_id, chat_id, status_msg=None, source="microdra
         else:
             if status_msg: await status_msg.edit("❌ Upload Gagal.")
             return False
-            
     except Exception as e:
         logger.error(f"Error processing {book_id}: {e}")
         if status_msg: await status_msg.edit(f"❌ Error: {e}")
@@ -212,12 +197,9 @@ async def process_drama_full(book_id, chat_id, status_msg=None, source="microdra
             shutil.rmtree(temp_dir)
 
 async def auto_mode_loop():
-    """Loop to find and process new dramas automatically with multiple API fallbacks."""
+    """Loop to find and process new dramas from DramaBite."""
     global processed_ids
-    
-    logger.info("🚀 Full Auto-Mode Started.")
-    
-    # Run immediately on startup
+    logger.info("🚀 DramaBite Auto-Mode Started.")
     is_initial_run = True
     
     while True:
@@ -226,102 +208,74 @@ async def auto_mode_loop():
             continue
             
         try:
-            interval = 5 if is_initial_run else 15 # Check every 15 mins after first run
-            logger.info(f"🔍 Scanning for new dramas (Next scan in {interval}m)...")
+            interval = 5 if is_initial_run else 15
+            logger.info(f"🔍 Scanning sources (Next in {interval}m)...")
             
-            # --- SOURCE 1: MicroDrama ---
-            logger.info("🔍 Scanning Source 1 (MicroDrama)...")
-            api1_dramas = await get_latest_dramas(pages=3 if is_initial_run else 1) or []
-            api1_new = [d for d in api1_dramas if str(d.get("bookId") or d.get("id") or d.get("bookid", "")) not in processed_ids]
+            # Source 1: Recommendation (Module)
+            logger.info("🔍 Scanning module-recommendations...")
+            rec_dramas = await get_latest_dramas(pages=2 if is_initial_run else 1) or []
             
-            # --- SOURCE 2: iDrama ---
-            logger.info("🔍 Scanning Source 2 (iDrama)...")
-            api2_dramas = await get_latest_idramas() or []
-            api2_new = [d for d in api2_dramas if str(d.get("bookId") or d.get("id") or d.get("bookid", "")) not in processed_ids]
+            # Source 2: Home Page (Paling Populer, etc.)
+            logger.info("🔍 Scanning home-list...")
+            home_dramas = await get_home_dramas() or []
             
-            # --- SYSTEM INTERLEAVED (Seling-Seling) ---
-            # Menggabungkan hasil dengan urutan selang-seling: S1, S2, S1, S2...
-            queue = [] # List of (drama_obj, source_name)
-            i, j = 0, 0
-            while i < len(api1_new) or j < len(api2_new):
-                if i < len(api1_new):
-                    queue.append((api1_new[i], "microdrama"))
-                    i += 1
-                if j < len(api2_new):
-                    queue.append((api2_new[j], "idrama"))
-                    j += 1
+            # Filter and Combine
+            new_queue = []
+            seen_in_scan = set()
             
-            # --- FALLBACK: Popular Search (Jika keduanya kosong) ---
-            if not queue and not is_initial_run:
-                logger.info("ℹ️ Both APIs up to date. Fetching Popular Search fallback...")
-                pop_dramas = await get_latest_dramas(pages=1, types=["populersearch"]) or []
-                pop_new = [d for d in pop_dramas if str(d.get("bookId") or d.get("id") or d.get("bookid", "")) not in processed_ids]
-                if pop_new:
-                    random_drama = random.choice(pop_new)
-                    queue = [(random_drama, "microdrama")]
-                    logger.info(f"🎲 Random popular picked: {random_drama.get('title')}")
-                else:
-                    logger.info("😴 No new dramas found in any source.")
+            for d in (rec_dramas + home_dramas):
+                book_id = str(d.get("cid") or d.get("id") or "")
+                if not book_id or book_id in seen_in_scan:
+                    continue
+                seen_in_scan.add(book_id)
+                if book_id not in processed_ids:
+                    new_queue.append(d)
             
             new_found = 0
-            
-            for drama, source in queue:
-                if not BotState.is_auto_running:
-                    break
+            for drama in new_queue:
+                if not BotState.is_auto_running: break
                     
-                book_id = str(drama.get("bookId") or drama.get("id") or drama.get("bookid", ""))
-                if not book_id:
-                    continue
-                    
-                if book_id not in processed_ids:
-                    # Segera tandai sebagai diproses
-                    processed_ids.add(book_id)
-                    save_processed(processed_ids)
-                    
-                    new_found += 1
-                    title = drama.get("title") or drama.get("bookName") or drama.get("name") or "Unknown"
-                    logger.info(f"✨ [{source.upper()}] New drama: {title} ({book_id}). Starting process...")
-                    
-                    # Notify admin
+                book_id = str(drama.get("cid") or drama.get("id"))
+                title = drama.get("title") or "Unknown"
+                
+                processed_ids.add(book_id)
+                save_processed(processed_ids)
+                
+                new_found += 1
+                logger.info(f"✨ New discovery: {title} ({book_id}). Starting process...")
+                
+                try:
+                    await client.send_message(ADMIN_ID, f"🆕 **Auto-System Mendeteksi Drama Baru!**\n🎬 `{title}`\n🆔 `{book_id}`\n⏳ Memproses...")
+                except: pass
+                
+                BotState.is_processing = True
+                success = await process_drama_full(book_id, AUTO_CHANNEL)
+                BotState.is_processing = False
+                
+                if success:
+                    logger.info(f"✅ Finished {title}")
                     try:
-                        await client.send_message(ADMIN_ID, f"🆕 **Auto-System Mendeteksi Drama Baru!**\n🎬 `[{source.upper()}] {title}`\n🆔 `{book_id}`\n⏳ Memproses download & merge...")
+                        await client.send_message(ADMIN_ID, f"✅ Sukses Auto-Post: **{title}**")
                     except: pass
-                    
-                    BotState.is_processing = True
-                    # Process to target channel
-                    success = await process_drama_full(book_id, AUTO_CHANNEL, source=source)
-                    BotState.is_processing = False
-                    
-                    if success:
-                        logger.info(f"✅ Finished {title}")
-                        try:
-                            await client.send_message(ADMIN_ID, f"✅ Sukses Auto-Post: **{title}** ke channel.")
-                        except: pass
-                    else:
-                        logger.error(f"❌ Failed to process {title}")
-                        BotState.is_auto_running = False
-                        try:
-                            await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal!\n🛑 **Auto-mode OTOMATIS BERHENTI**.\nCek /panel untuk menghidupkan kembali.")
-                        except: pass
-                        break
-                    
-                    # Prevent hitting API/Telegram rate limits too hard
-                    await asyncio.sleep(10)
+                else:
+                    logger.error(f"❌ Failed to process {title}")
+                    try:
+                        await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal!")
+                    except: pass
+                
+                await asyncio.sleep(10) # Avoid flooding
             
             if new_found == 0:
-                logger.info("😴 No new dramas found in this scan.")
+                logger.info("😴 No new content.")
             
             is_initial_run = False
-            
-            # Wait for next interval but break early if auto_running is changed
             for _ in range(interval * 60):
-                if not BotState.is_auto_running:
-                    break
+                if not BotState.is_auto_running: break
                 await asyncio.sleep(1)
-            
         except Exception as e:
-            logger.error(f"⚠️ Error in auto_mode_loop: {e}")
-            await asyncio.sleep(60) # retry after 1 min
+            logger.error(f"⚠️ Loop error: {e}")
+            await asyncio.sleep(60)
+
 
 if __name__ == '__main__':
     logger.info("Initializing Dramabox Auto-Bot...")

@@ -30,8 +30,8 @@ def merge_episodes(video_dir: str, output_path: str):
         
         logger.info(f"Running ffmpeg merge command: {' '.join(command)}")
         
-        # Execute ffmpeg synchronously (can be wrapped in asyncio to be non-blocking)
-        process = subprocess.run(command, capture_output=True, text=True)
+        # Execute ffmpeg synchronously within the video directory to avoid relative path issues
+        process = subprocess.run(command, capture_output=True, text=True, cwd=video_dir)
         if process.returncode != 0:
             logger.error(f"FFmpeg failed with error:\n{process.stderr}")
             return False
