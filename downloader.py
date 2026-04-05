@@ -82,7 +82,6 @@ async def download_all_episodes(episodes, download_dir: str, semaphore_count: in
                 # Fallback for direct MP4 if any exists
                 import httpx
                 async with httpx.AsyncClient(timeout=60) as client:
-                    from downloader import download_file # This seems to be in the same file
                     success = await download_file_inner(client, url, filepath)
             
             if success:

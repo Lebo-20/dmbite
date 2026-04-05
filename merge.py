@@ -28,16 +28,31 @@ def merge_episodes(video_dir: str, output_path: str):
             output_path
         ]
         
-        logger.info(f"Running ffmpeg merge command: {' '.join(command)}")
+        logger.info(f"Running ffmpeg merge command (fast copy): {' '.join(command)}")
         
-        # Execute ffmpeg synchronously within the video directory to avoid relative path issues
+        # 1. First attempt: -c copy (Very Fast)
         process = subprocess.run(command, capture_output=True, text=True, cwd=video_dir)
-        if process.returncode != 0:
-            logger.error(f"FFmpeg failed with error:\n{process.stderr}")
-            return False
+        if process.returncode == 0:
+            logger.info(f"Successfully merged episodes (copy) into {output_path}")
+            return True
             
-        logger.info(f"Successfully merged episodes into {output_path}")
-        return True
+        # 2. Second attempt: Re-encode (Slow but reliable)
+        logger.warning(f"Fast merge failed (likely resolution mismatch), retrying with re-encode...")
+        re_encode_command = [
+            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "-i", list_file_path,
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23", "-c:a", "aac",
+            output_path
+        ]
+        logger.info(f"Running ffmpeg merge command (re-encode): {' '.join(re_encode_command)}")
+        process_re = subprocess.run(re_encode_command, capture_output=True, text=True, cwd=video_dir)
+        
+        if process_re.returncode == 0:
+            logger.info(f"Successfully merged episodes (re-encode) into {output_path}")
+            return True
+        else:
+            logger.error(f"FFmpeg re-encode merge failed with error:\n{process_re.stderr}")
+            return False
     except Exception as e:
         logger.error(f"Error during merge: {e}")
         return False

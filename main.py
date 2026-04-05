@@ -26,6 +26,13 @@ ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 AUTO_CHANNEL = int(os.environ.get("AUTO_CHANNEL", ADMIN_ID))
 PROCESSED_FILE = "processed.json"
 
+def sanitize_filename(filename):
+    """Remove invalid characters from filenames."""
+    invalid_chars = '<>:"/\\|?*'
+    for char in invalid_chars:
+        filename = filename.replace(char, '')
+    return filename.strip()
+
 # ... rest of the state management remains same ...
 def load_processed():
     if os.path.exists(PROCESSED_FILE):
@@ -51,7 +58,7 @@ class BotState:
     is_processing = False
 
 # Initialize client
-client = TelegramClient('dramabite_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('fundrama_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 def get_panel_buttons():
     status_text = "🟢 RUNNING" if BotState.is_auto_running else "🔴 STOPPED"
@@ -83,7 +90,7 @@ async def update_bot(event):
 async def panel(event):
     if event.chat_id != ADMIN_ID:
         return
-    await event.reply("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
+    await event.reply("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
 
 @client.on(events.CallbackQuery())
 async def panel_callback(event):
@@ -94,14 +101,14 @@ async def panel_callback(event):
         if data == b"start_auto":
             BotState.is_auto_running = True
             await event.answer("Auto-mode started!")
-            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
         elif data == b"stop_auto":
             BotState.is_auto_running = False
             await event.answer("Auto-mode stopped!")
-            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
         elif data == b"status":
             await event.answer(f"Status: {'Running' if BotState.is_auto_running else 'Stopped'}")
-            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
     except Exception as e:
         if "message is not modified" in str(e).lower() or "Message string and reply markup" in str(e):
             pass
@@ -110,7 +117,7 @@ async def panel_callback(event):
 
 @client.on(events.NewMessage(pattern='/start'))
 async def start(event):
-    await event.reply("Welcome to DramaBite Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
+    await event.reply("Welcome to FunDrama Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
 
 @client.on(events.NewMessage(pattern=r'/download (\d+)'))
 async def on_download(event):
@@ -139,15 +146,12 @@ async def on_download(event):
     
     try:
         BotState.is_processing = True
-        processed_ids.add(book_id)
-        save_processed(processed_ids)
-        
         await process_drama_full(book_id, chat_id, status_msg)
     finally:
         BotState.is_processing = False
 
 async def process_drama_full(book_id, chat_id, status_msg=None):
-    """DramaBite specific processing logic."""
+    """FunDrama specific processing logic."""
     detail = await get_drama_detail(book_id)
     episodes = await get_all_episodes(book_id)
     
@@ -159,7 +163,7 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
     description = detail.get("desc") or detail.get("description") or "No description available."
     poster = detail.get("cover") or detail.get("poster") or ""
     
-    temp_dir = tempfile.mkdtemp(prefix=f"dramabite_{book_id}_")
+    temp_dir = tempfile.mkdtemp(prefix=f"fundrama_{book_id}_")
     video_dir = os.path.join(temp_dir, "episodes")
     os.makedirs(video_dir, exist_ok=True)
     
@@ -173,7 +177,8 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
             return False
 
         # Merge
-        output_video_path = os.path.join(temp_dir, f"{title}.mp4")
+        safe_title = sanitize_filename(title)
+        output_video_path = os.path.join(temp_dir, f"{safe_title}.mp4")
         merge_success = merge_episodes(video_dir, output_video_path)
         if not merge_success:
             if status_msg: await status_msg.edit("❌ Merge Gagal.")
@@ -202,9 +207,9 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
                 logger.warning(f"Could not remove temp_dir {temp_dir}: {e}")
 
 async def auto_mode_loop():
-    """Loop to find and process new dramas from DramaBite."""
+    """Loop to find and process new dramas from FunDrama."""
     global processed_ids
-    logger.info("🚀 DramaBite Auto-Mode Started.")
+    logger.info("🚀 FunDrama Auto-Mode Started.")
     is_initial_run = True
     
     while True:
@@ -243,9 +248,6 @@ async def auto_mode_loop():
                 book_id = str(drama.get("cid") or drama.get("id"))
                 title = drama.get("title") or "Unknown"
                 
-                processed_ids.add(book_id)
-                save_processed(processed_ids)
-                
                 new_found += 1
                 logger.info(f"✨ New discovery: {title} ({book_id}). Starting process...")
                 
@@ -258,6 +260,8 @@ async def auto_mode_loop():
                     success = await process_drama_full(book_id, AUTO_CHANNEL)
                     
                     if success:
+                        processed_ids.add(book_id)
+                        save_processed(processed_ids)
                         logger.info(f"✅ Finished {title}")
                         try:
                             await client.send_message(ADMIN_ID, f"✅ Sukses Auto-Post: **{title}**")
@@ -265,6 +269,10 @@ async def auto_mode_loop():
                     else:
                         logger.error(f"❌ Failed to process {title}")
                         try:
+                            # We still mark it as processed even if it fails to avoid infinite loops of failure
+                            # but we do it after the attempt.
+                            processed_ids.add(book_id)
+                            save_processed(processed_ids)
                             await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal! Melewati ke judul berikutnya...")
                         except: pass
                 except Exception as e:
@@ -287,7 +295,7 @@ async def auto_mode_loop():
 
 
 if __name__ == '__main__':
-    logger.info("Initializing Dramabox Auto-Bot...")
+    logger.info("Initializing FunDrama Auto-Bot...")
     
     # Start auto loop and keep the client running
     client.loop.create_task(auto_mode_loop())
