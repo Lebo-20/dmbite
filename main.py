@@ -137,12 +137,14 @@ async def on_download(event):
     title = detail.get("title") or detail.get("name") or f"Drama_{book_id}"
     status_msg = await event.reply(f"🎬 Drama: **{title}**\n📽 Total Episodes: {len(episodes)}\n\n⏳ Sedang mendownload...")
     
-    BotState.is_processing = True
-    processed_ids.add(book_id)
-    save_processed(processed_ids)
-    
-    await process_drama_full(book_id, chat_id, status_msg)
-    BotState.is_processing = False
+    try:
+        BotState.is_processing = True
+        processed_ids.add(book_id)
+        save_processed(processed_ids)
+        
+        await process_drama_full(book_id, chat_id, status_msg)
+    finally:
+        BotState.is_processing = False
 
 async def process_drama_full(book_id, chat_id, status_msg=None):
     """DramaBite specific processing logic."""
@@ -194,7 +196,10 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
         return False
     finally:
         if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception as e:
+                logger.warning(f"Could not remove temp_dir {temp_dir}: {e}")
 
 async def auto_mode_loop():
     """Loop to find and process new dramas from DramaBite."""
@@ -248,20 +253,24 @@ async def auto_mode_loop():
                     await client.send_message(ADMIN_ID, f"🆕 **Auto-System Mendeteksi Drama Baru!**\n🎬 `{title}`\n🆔 `{book_id}`\n⏳ Memproses...")
                 except: pass
                 
-                BotState.is_processing = True
-                success = await process_drama_full(book_id, AUTO_CHANNEL)
-                BotState.is_processing = False
-                
-                if success:
-                    logger.info(f"✅ Finished {title}")
-                    try:
-                        await client.send_message(ADMIN_ID, f"✅ Sukses Auto-Post: **{title}**")
-                    except: pass
-                else:
-                    logger.error(f"❌ Failed to process {title}")
-                    try:
-                        await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal!")
-                    except: pass
+                try:
+                    BotState.is_processing = True
+                    success = await process_drama_full(book_id, AUTO_CHANNEL)
+                    
+                    if success:
+                        logger.info(f"✅ Finished {title}")
+                        try:
+                            await client.send_message(ADMIN_ID, f"✅ Sukses Auto-Post: **{title}**")
+                        except: pass
+                    else:
+                        logger.error(f"❌ Failed to process {title}")
+                        try:
+                            await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal! Melewati ke judul berikutnya...")
+                        except: pass
+                except Exception as e:
+                    logger.error(f"💥 Critical error in processing {title}: {e}")
+                finally:
+                    BotState.is_processing = False
                 
                 await asyncio.sleep(10) # Avoid flooding
             

@@ -27,7 +27,16 @@ async def download_m3u8(url: str, path: str):
             stderr=asyncio.subprocess.PIPE
         )
         
-        stdout, stderr = await process.communicate()
+        try:
+            # 10 minutes timeout per episode
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=600)
+        except asyncio.TimeoutError:
+            try:
+                process.terminate()
+            except:
+                pass
+            logger.error(f"FFmpeg download timed out for {url}")
+            return False
         if process.returncode == 0:
             return True
         else:
