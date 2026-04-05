@@ -228,7 +228,7 @@ async def auto_mode_loop():
             
             # Source 1: Recommendation (Module)
             logger.info("🔍 Scanning module-recommendations...")
-            rec_dramas = await get_latest_dramas(pages=2 if is_initial_run else 1) or []
+            rec_dramas = await get_latest_dramas(pages=3 if is_initial_run else 2) or []
             
             # Source 2: Home Page (Paling Populer, etc.)
             logger.info("🔍 Scanning home-list...")
