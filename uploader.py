@@ -41,14 +41,16 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         except Exception as e:
             logger.warning(f"Failed to download poster: {e}")
         
-        # Send as visible photo
-        await client.send_file(
-            chat_id,
-            poster_path or poster_url,
-            caption=caption,
-            parse_mode='md',
-            force_document=False  # Force as PHOTO, not file
-        )
+        # Send caption (with optional poster)
+        poster_to_send = poster_path or poster_url
+        try:
+            if poster_to_send:
+                await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md')
+            else:
+                await client.send_message(chat_id, caption, parse_mode='md')
+        except Exception as e:
+            logger.error(f"Failed to send poster: {e}")
+            await client.send_message(chat_id, caption, parse_mode='md')
         
         # Cleanup poster temp file
         if poster_path and os.path.exists(poster_path):
