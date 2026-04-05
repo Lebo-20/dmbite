@@ -170,18 +170,23 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
     try:
         if status_msg: await status_msg.edit(f"🎬 Processing **{title}**...")
         
-        # Download (Now handles m3u8 in downloader.py)
-        success = await download_all_episodes(episodes, video_dir)
-        if not success:
-            if status_msg: await status_msg.edit("❌ Download Gagal.")
+        # Download (Now returns (success_count, total_count))
+        success_count, total_count = await download_all_episodes(episodes, video_dir)
+        
+        if success_count == 0:
+            if status_msg: await status_msg.edit(f"❌ Download Gagal: 0/{total_count} episode berhasil.")
             return False
+            
+        if success_count < total_count:
+            logger.warning(f"⚠️ Only {success_count}/{total_count} episodes downloaded for {title}. Proceeding with partial content.")
+            if status_msg: await status_msg.edit(f"🎬 Processing **{title}** ({success_count}/{total_count} eps)...")
 
         # Merge
         safe_title = sanitize_filename(title)
         output_video_path = os.path.join(temp_dir, f"{safe_title}.mp4")
         merge_success = merge_episodes(video_dir, output_video_path)
         if not merge_success:
-            if status_msg: await status_msg.edit("❌ Merge Gagal.")
+            if status_msg: await status_msg.edit(f"❌ Merge Gagal (Total {success_count} eps).")
             return False
 
         # Upload
