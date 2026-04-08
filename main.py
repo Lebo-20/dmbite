@@ -58,7 +58,7 @@ class BotState:
     is_processing = False
 
 # Initialize client
-client = TelegramClient('fundrama_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+client = TelegramClient('dramabite_bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 
 def get_panel_buttons():
     status_text = "🟢 RUNNING" if BotState.is_auto_running else "🔴 STOPPED"
@@ -90,7 +90,7 @@ async def update_bot(event):
 async def panel(event):
     if event.chat_id != ADMIN_ID:
         return
-    await event.reply("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
+    await event.reply("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
 
 @client.on(events.CallbackQuery())
 async def panel_callback(event):
@@ -101,14 +101,14 @@ async def panel_callback(event):
         if data == b"start_auto":
             BotState.is_auto_running = True
             await event.answer("Auto-mode started!")
-            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
         elif data == b"stop_auto":
             BotState.is_auto_running = False
             await event.answer("Auto-mode stopped!")
-            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
         elif data == b"status":
             await event.answer(f"Status: {'Running' if BotState.is_auto_running else 'Stopped'}")
-            await event.edit("🎛 **FunDrama Control Panel**", buttons=get_panel_buttons())
+            await event.edit("🎛 **DramaBite Control Panel**", buttons=get_panel_buttons())
     except Exception as e:
         if "message is not modified" in str(e).lower() or "Message string and reply markup" in str(e):
             pass
@@ -117,7 +117,7 @@ async def panel_callback(event):
 
 @client.on(events.NewMessage(pattern='/start'))
 async def start(event):
-    await event.reply("Welcome to FunDrama Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
+    await event.reply("Welcome to DramaBite Downloader Bot! 🎉\n\nGunakan perintah `/download {bookId}` untuk mulai.")
 
 @client.on(events.NewMessage(pattern=r'/download (\d+)'))
 async def on_download(event):
@@ -151,7 +151,7 @@ async def on_download(event):
         BotState.is_processing = False
 
 async def process_drama_full(book_id, chat_id, status_msg=None):
-    """FunDrama specific processing logic."""
+    """DramaBite specific processing logic."""
     detail = await get_drama_detail(book_id)
     episodes = await get_all_episodes(book_id)
     
@@ -163,7 +163,7 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
     description = detail.get("desc") or detail.get("description") or "No description available."
     poster = detail.get("cover") or detail.get("poster") or ""
     
-    temp_dir = tempfile.mkdtemp(prefix=f"fundrama_{book_id}_")
+    temp_dir = tempfile.mkdtemp(prefix=f"dramabite_{book_id}_")
     video_dir = os.path.join(temp_dir, "episodes")
     os.makedirs(video_dir, exist_ok=True)
     
@@ -212,9 +212,9 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
                 logger.warning(f"Could not remove temp_dir {temp_dir}: {e}")
 
 async def auto_mode_loop():
-    """Loop to find and process new dramas from FunDrama."""
+    """Loop to find and process new dramas from DramaBite."""
     global processed_ids
-    logger.info("🚀 FunDrama Auto-Mode Started.")
+    logger.info("🚀 DramaBite Auto-Mode Started.")
     is_initial_run = True
     
     while True:
@@ -300,7 +300,7 @@ async def auto_mode_loop():
 
 
 if __name__ == '__main__':
-    logger.info("Initializing FunDrama Auto-Bot...")
+    logger.info("Initializing DramaBite Auto-Bot...")
     
     # Start auto loop and keep the client running
     client.loop.create_task(auto_mode_loop())

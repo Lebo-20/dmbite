@@ -16,7 +16,7 @@ async def test():
     client = TelegramClient('test_channel_session', api_id, api_hash)
     await client.start(bot_token=bot_token)
     try:
-        await client.send_message(channel_id, "🔔 **Test Message from FunDrama Bot**\n\nJika Anda melihat pesan ini, berarti Channel ID sudah benar dan bot memiliki akses.")
+        await client.send_message(channel_id, "🔔 **Test Message from DramaBite Bot**\n\nJika Anda melihat pesan ini, berarti Channel ID sudah benar dan bot memiliki akses.")
         print("✅ SUCCESS: Message sent to channel.")
     except Exception as e:
         print(f"❌ FAILURE: {e}")
