@@ -19,13 +19,13 @@ async def test_single_drama(book_id):
         return
     
     title = detail.get("title") or "Unknown"
-    print(f"✅ Judul: {title}")
+    print(f"TITLE: {title}")
     
     episodes = await get_all_episodes(book_id)
-    print(f"✅ Jumlah Episode: {len(episodes) if episodes else 0}")
+    print(f"EPISODES COUNT: {len(episodes) if episodes else 0}")
     
     if not episodes:
-        print("❌ GAGAL: Tidak ada episode.")
+        print("FAIL: No episodes found.")
         return
 
     # 2. Cek Download (Coba 2 episode saja untuk tes awal)
@@ -33,21 +33,21 @@ async def test_single_drama(book_id):
     temp_dir = "test_download"
     os.makedirs(temp_dir, exist_ok=True)
     
-    print("⏳ Mengetes download 2 episode pertama...")
+    print("WAIT: Testing download for first 2 episodes...")
     success, total = await download_all_episodes(test_eps, temp_dir)
     
     if success > 0:
-        print(f"✅ BERHASIL DOWNLOAD: {success}/{total} episode.")
+        print(f"SUCCESS DOWNLOAD: {success}/{total} episodes.")
         
         # 3. Cek Merge
-        print("⏳ Mengetes merge...")
+        print("WAIT: Testing merge...")
         merge_success = merge_episodes(temp_dir, "test_merged.mp4")
         if merge_success:
-            print("✅ BERHASIL MERGE!")
+            print("SUCCESS MERGE!")
         else:
-            print("❌ GAGAL MERGE.")
+            print("FAIL MERGE.")
     else:
-        print("❌ GAGAL DOWNLOAD. Cek koneksi FFmpeg Anda.")
+        print("FAIL DOWNLOAD. Check FFmpeg connection.")
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
