@@ -7,6 +7,9 @@ logger = logging.getLogger(__name__)
 
 async def download_m3u8(url: str, path: str, retries: int = 3):
     """Downloads an m3u8 playlist using ffmpeg and converts it to mp4, with retries."""
+    # Pastikan direktori tujuan ada sebelum menjalankan FFmpeg
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    
     for attempt in range(1, retries + 1):
         try:
             # -y (overwrite), -i (input), -c copy (fast as it doesn't re-encode)
