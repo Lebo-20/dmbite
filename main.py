@@ -218,7 +218,7 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
             return True # Anggap sukses agar loop lanjut k id berikutnya
         # ----------------------
         
-        # Download (Now with progress callback)
+        # Download
         import time
         download_start_time = time.time()
         success_count, total_count = await download_all_episodes(
@@ -227,7 +227,11 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
         )
         
         if success_count == 0:
-            if status_msg: await status_msg.edit(f"❌ Download Gagal: 0/{total_count} episode berhasil.")
+            err_text = f"❌ Download Gagal: 0/{total_count} episode berhasil."
+            if status_msg: await status_msg.edit(err_text)
+            try:
+                await client.send_message(ADMIN_ID, f"🚨 **PROSES GAGAL**: `{title}`\nAlasan: Gagal mendownload episode (FFmpeg Error).")
+            except: pass
             return False
             
         if success_count < total_count:
@@ -239,7 +243,11 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
         output_video_path = os.path.join(temp_dir, f"{safe_title}.mp4")
         merge_success = merge_episodes(video_dir, output_video_path)
         if not merge_success:
-            if status_msg: await status_msg.edit(f"❌ Merge Gagal (Total {success_count} eps).")
+            err_text = f"❌ Merge Gagal (Total {success_count} eps)."
+            if status_msg: await status_msg.edit(err_text)
+            try:
+                await client.send_message(ADMIN_ID, f"🚨 **PROSES GAGAL**: `{title}`\nAlasan: Gagal saat proses merging (FFmpeg Merge Error).")
+            except: pass
             return False
 
         # Upload
@@ -256,6 +264,9 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
             return True
         else:
             if status_msg: await status_msg.edit("❌ Upload Gagal.")
+            try:
+                await client.send_message(ADMIN_ID, f"🚨 **PROSES GAGAL**: `{title}`\nAlasan: Gagal saat mengunggah ke Telegram.")
+            except: pass
             return False
     except Exception as e:
         logger.error(f"Error processing {book_id}: {e}")
