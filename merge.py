@@ -42,25 +42,8 @@ def merge_episodes(video_dir: str, output_path: str):
         if process.returncode == 0:
             logger.info(f"✅ Berhasil Merge Cepat: {output_path}")
             return check_and_prepare_files(output_path)
-            
-        # 2. Second attempt: Re-encode (Lambat tapi Pasti Berhasil)
-        logger.warning("⚠️ Merge Cepat gagal (mungkin resolusi berbeda). Mengulangi dengan Re-encode (Slow Mode)...")
-        
-        re_encode_command = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-            "-i", list_file_path,
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
-            output_path
-        ]
-        
-        process_re = subprocess.run(re_encode_command, capture_output=True, text=True)
-        
-        if process_re.returncode == 0:
-            logger.info(f"✅ Berhasil Merge dengan Re-encode: {output_path}")
-            return check_and_prepare_files(output_path)
         else:
-            logger.error(f"❌ SEMUAL METODE MERGE GAGAL.\nError: {process_re.stderr}")
+            logger.error(f"❌ MERGE GAGAL: Video tidak bisa digabung secara langsung.\nError: {process.stderr}")
             return []
             
     except Exception as e:
