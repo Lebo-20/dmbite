@@ -279,6 +279,9 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
     except Exception as e:
         logger.error(f"Error processing {book_id}: {e}")
         if status_msg: await status_msg.edit(f"❌ Error: {e}")
+        try:
+            await client.send_message(ADMIN_ID, f"💥 **CRITICAL ERROR**: `{title}`\nAlasan: {str(e)[:200]}")
+        except: pass
         return False
     finally:
         if os.path.exists(temp_dir):
@@ -354,7 +357,8 @@ async def auto_mode_loop():
                             # but we do it after the attempt.
                             processed_ids.add(book_id)
                             save_processed(processed_ids)
-                            await client.send_message(ADMIN_ID, f"🚨 **ERROR**: Proses `{title}` gagal! Melewati ke judul berikutnya...")
+                            # Pesan spesifik sudah dikirim oleh process_drama_full
+                            pass
                         except: pass
                 except Exception as e:
                     logger.error(f"💥 Critical error in processing {title}: {e}")
