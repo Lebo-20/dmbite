@@ -192,8 +192,16 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
     detail = await get_drama_detail(book_id)
     episodes = await get_all_episodes(book_id)
     
-    if not detail or not episodes:
-        if status_msg: await status_msg.edit(f"❌ Detail atau Episode `{book_id}` tidak ditemukan.")
+    if not detail:
+        error_msg = f"❌ Detail drama `{book_id}` tidak ditemukan di API."
+        if status_msg: await status_msg.edit(error_msg)
+        await client.send_message(ADMIN_ID, f"🚨 **PROSES GAGAL**: `{book_id}`\nAlasan: Detail drama tidak ditemukan.")
+        return False
+        
+    if not episodes:
+        error_msg = f"❌ Episode untuk drama `{book_id}` tidak ditemukan di API."
+        if status_msg: await status_msg.edit(error_msg)
+        await client.send_message(ADMIN_ID, f"🚨 **PROSES GAGAL**: `{book_id}`\nAlasan: Drama tidak memiliki episode.")
         return False
 
     title = detail.get("title") or detail.get("name") or f"Drama_{book_id}"
