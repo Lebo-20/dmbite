@@ -60,6 +60,14 @@ async def upload_drama(client: TelegramClient, chat_id: int,
     import subprocess
     import tempfile
     try:
+        # Resolve entity if ID is a number (especially for private groups/channels)
+        try:
+            entity = await client.get_entity(chat_id)
+            target = entity
+        except Exception as e:
+            logger.warning(f"Could not resolve entity for {chat_id}: {e}")
+            target = chat_id
+            
         # 1. Send Poster + Description as PHOTO (not file)
         caption = f"🎬 **{title}**\n\n📝 **Sinopsis:**\n{description[:500]}..."
         
@@ -80,18 +88,18 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         poster_to_send = poster_path or poster_url
         try:
             if poster_to_send:
-                await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
+                await client.send_message(target, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
             else:
-                await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
+                await client.send_message(target, caption, parse_mode='md', reply_to=topic_id)
         except Exception as e:
             logger.error(f"Failed to send poster: {e}")
-            await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
+            await client.send_message(target, caption, parse_mode='md', reply_to=topic_id)
         
         # Cleanup poster temp file
         if poster_path and os.path.exists(poster_path):
             os.remove(poster_path)
         
-        status_msg = await client.send_message(chat_id, "📤 Ekstraksi Thumbnail & Durasi Video...", reply_to=topic_id)
+        status_msg = await client.send_message(target, "📤 Ekstraksi Thumbnail & Durasi Video...", reply_to=topic_id)
         
         # 2. Extract Duration & Dimensions (Fallback directly if fails)
         duration = 0
@@ -131,7 +139,7 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         
         start_time = time.time()
         await client.send_file(
-            chat_id,
+            target,
             video_path,
             caption=f"🎥 Full Episode: {title}",
             force_document=False, # FORCE IT AS VIDEO STREAM
