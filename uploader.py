@@ -60,20 +60,11 @@ async def upload_drama(client: TelegramClient, chat_id: int,
     import subprocess
     import tempfile
     try:
-        # Resolve entity if ID is a number (especially for private groups/channels)
+        # Pastikan chat_id dalam bentuk integer (Bot tidak perlu get_entity jika ID sudah benar)
         try:
-            entity = await client.get_entity(chat_id)
-            target = entity
-        except Exception as e:
-            logger.warning(f"Entity mismatch for {chat_id}, refreshing dialogs...")
-            # Ambil semua percakapan bot untuk update cache ID
-            await client.get_dialogs()
-            try:
-                entity = await client.get_entity(chat_id)
-                target = entity
-            except:
-                logger.error(f"STILL could not resolve entity for {chat_id}")
-                target = chat_id
+            target = int(chat_id)
+        except:
+            target = chat_id
             
         # 1. Send Poster + Description as PHOTO (not file)
         caption = f"🎬 **{title}**\n\n📝 **Sinopsis:**\n{description[:500]}..."
