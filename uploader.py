@@ -65,8 +65,15 @@ async def upload_drama(client: TelegramClient, chat_id: int,
             entity = await client.get_entity(chat_id)
             target = entity
         except Exception as e:
-            logger.warning(f"Could not resolve entity for {chat_id}: {e}")
-            target = chat_id
+            logger.warning(f"Entity mismatch for {chat_id}, refreshing dialogs...")
+            # Ambil semua percakapan bot untuk update cache ID
+            await client.get_dialogs()
+            try:
+                entity = await client.get_entity(chat_id)
+                target = entity
+            except:
+                logger.error(f"STILL could not resolve entity for {chat_id}")
+                target = chat_id
             
         # 1. Send Poster + Description as PHOTO (not file)
         caption = f"🎬 **{title}**\n\n📝 **Sinopsis:**\n{description[:500]}..."
