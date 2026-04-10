@@ -229,9 +229,13 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
         # Download
         import time
         download_start_time = time.time()
+
+        async def p_callback(c, t):
+            if status_msg:
+                await download_progress_callback(c, t, status_msg, title, download_start_time)
+
         success_count, total_count = await download_all_episodes(
-            episodes, video_dir, 
-            progress_callback=lambda c, t: download_progress_callback(c, t, status_msg, title, download_start_time) if status_msg else None
+            episodes, video_dir, progress_callback=p_callback
         )
         
         if success_count == 0:
