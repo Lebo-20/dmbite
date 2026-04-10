@@ -200,7 +200,11 @@ async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None
     description = detail.get("desc") or detail.get("description") or "No description available."
     poster = detail.get("cover") or detail.get("poster") or ""
     
-    temp_dir = tempfile.mkdtemp(prefix=f"dramabite_{book_id}_")
+    # Gunakan folder temp lokal untuk menghindari masalah FFmpeg Snap Confinement
+    base_temp = os.path.join(os.getcwd(), "temp")
+    os.makedirs(base_temp, exist_ok=True)
+    
+    temp_dir = tempfile.mkdtemp(prefix=f"dramabite_{book_id}_", dir=base_temp)
     video_dir = os.path.join(temp_dir, "episodes")
     os.makedirs(video_dir, exist_ok=True)
     
