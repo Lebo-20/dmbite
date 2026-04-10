@@ -17,6 +17,7 @@ from api import (
 from downloader import download_all_episodes
 from merge import merge_episodes
 from uploader import upload_drama
+from firebase_utils import is_title_uploaded, mark_title_as_uploaded
 
 # Configuration
 API_ID = int(os.environ.get("API_ID", "0"))
@@ -24,6 +25,7 @@ API_HASH = os.environ.get("API_HASH", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "0"))
 AUTO_CHANNEL = int(os.environ.get("AUTO_CHANNEL", ADMIN_ID))
+TOPIC_ID = int(os.environ.get("TOPIC_ID", "0"))
 PROCESSED_FILE = "processed.json"
 
 def sanitize_filename(filename):
@@ -146,12 +148,47 @@ async def on_download(event):
     
     try:
         BotState.is_processing = True
-        await process_drama_full(book_id, chat_id, status_msg)
+        # Always upload to AUTO_CHANNEL / TOPIC_ID as requested
+        await process_drama_full(book_id, chat_id, status_msg, target_chat=AUTO_CHANNEL, target_topic=TOPIC_ID)
     finally:
         BotState.is_processing = False
 
-async def process_drama_full(book_id, chat_id, status_msg=None):
+async def download_progress_callback(current, total, event, title, start_time):
+    """Update progress for downloading phase."""
+    # Bar
+    bar_length = 10
+    filled_length = int(bar_length * current // total)
+    bar = '■' * filled_length + '□' * (bar_length - filled_length)
+    
+    # ETC
+    import time
+    elapsed_time = time.time() - start_time
+    if current > 0:
+        total_time = (elapsed_time / current) * total
+        remaining_time = total_time - elapsed_time
+        mins, secs = divmod(int(remaining_time), 60)
+        etc = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
+    else:
+        etc = "Calculating..."
+
+    status_text = (
+        f"🎬 **{title}**\n"
+        f"🔥 **Status:** download...\n"
+        f"🎞 **Episode** {current}/{total}\n"
+        f"|{bar}| {int(current/total*100)}%\n"
+        f"⏳ **Estimasi Selesai:** {etc}"
+    )
+    
+    try:
+        await event.edit(status_text)
+    except:
+        pass
+
+async def process_drama_full(book_id, chat_id, status_msg=None, target_chat=None, target_topic=None):
     """DramaBite specific processing logic."""
+    # Fallback to chat_id if target not specified
+    target_chat = target_chat or chat_id
+    
     detail = await get_drama_detail(book_id)
     episodes = await get_all_episodes(book_id)
     
@@ -170,8 +207,20 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
     try:
         if status_msg: await status_msg.edit(f"🎬 Processing **{title}**...")
         
-        # Download (Now returns (success_count, total_count))
-        success_count, total_count = await download_all_episodes(episodes, video_dir)
+        # --- FIREBASE CHECK ---
+        if is_title_uploaded(title):
+            if status_msg: await status_msg.edit(f"⏭ **{title}** sudah pernah di-upload. Skip.")
+            logger.info(f"Skip {title} - sudah ada di Firebase.")
+            return True # Anggap sukses agar loop lanjut k id berikutnya
+        # ----------------------
+        
+        # Download (Now with progress callback)
+        import time
+        download_start_time = time.time()
+        success_count, total_count = await download_all_episodes(
+            episodes, video_dir, 
+            progress_callback=lambda c, t: download_progress_callback(c, t, status_msg, title, download_start_time) if status_msg else None
+        )
         
         if success_count == 0:
             if status_msg: await status_msg.edit(f"❌ Download Gagal: 0/{total_count} episode berhasil.")
@@ -191,10 +240,14 @@ async def process_drama_full(book_id, chat_id, status_msg=None):
 
         # Upload
         upload_success = await upload_drama(
-            client, chat_id, title, description, poster, output_video_path
+            client, target_chat, title, description, poster, output_video_path, 
+            topic_id=target_topic, episodes_count=len(episodes)
         )
         
         if upload_success:
+            # --- FIREBASE SAVE ---
+            mark_title_as_uploaded(title)
+            # ---------------------
             if status_msg: await status_msg.delete()
             return True
         else:
@@ -262,7 +315,7 @@ async def auto_mode_loop():
                 
                 try:
                     BotState.is_processing = True
-                    success = await process_drama_full(book_id, AUTO_CHANNEL)
+                    success = await process_drama_full(book_id, AUTO_CHANNEL, target_topic=TOPIC_ID)
                     
                     if success:
                         processed_ids.add(book_id)

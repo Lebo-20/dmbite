@@ -6,19 +6,54 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-async def upload_progress(current, total, event, msg_text="Uploading..."):
-    """Callback function for upload progress."""
+import time
+
+async def upload_progress(current, total, event, title, start_time, episodes_count=None):
+    """Callback function for upload progress with Bar and ETC."""
+    if total == 0: return
+    
     percentage = (current / total) * 100
+    
+    # Avoid flood by updating every 5%
+    last_percent = getattr(event, '_last_percent', -5)
+    if int(percentage) - last_percent < 5 and current < total:
+        return
+    event._last_percent = int(percentage)
+
+    # Bar
+    bar_length = 10
+    filled_length = int(bar_length * current // total)
+    bar = '■' * filled_length + '□' * (bar_length - filled_length)
+    
+    # ETC
+    elapsed_time = time.time() - start_time
+    if current > 0:
+        total_time = (elapsed_time / current) * total
+        remaining_time = total_time - elapsed_time
+        mins, secs = divmod(int(remaining_time), 60)
+        etc = f"{mins}m {secs}s" if mins > 0 else f"{secs}s"
+    else:
+        etc = "Calculating..."
+
+    ep_info = f"🎞 **Episode:** {episodes_count}/{episodes_count}\n" if episodes_count else ""
+    
+    status_text = (
+        f"🎬 **{title}**\n"
+        f"🔥 **Status:** upload...\n"
+        f"{ep_info}"
+        f"|{bar}| {percentage:.0f}%\n"
+        f"⏳ **Estimasi Selesai:** {etc}"
+    )
+    
     try:
-        # Avoid flood by updating every few percentages
-        if int(percentage) % 10 == 0:
-            await event.edit(f"{msg_text} {percentage:.1f}%")
+        await event.edit(status_text)
     except:
         pass
 
 async def upload_drama(client: TelegramClient, chat_id: int, 
                        title: str, description: str, 
-                       poster_url: str, video_path: str):
+                       poster_url: str, video_path: str,
+                       topic_id: int = None, episodes_count: int = None):
     """
     Uploads the drama information and merged video to Telegram.
     """
@@ -45,18 +80,18 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         poster_to_send = poster_path or poster_url
         try:
             if poster_to_send:
-                await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md')
+                await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
             else:
-                await client.send_message(chat_id, caption, parse_mode='md')
+                await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
         except Exception as e:
             logger.error(f"Failed to send poster: {e}")
-            await client.send_message(chat_id, caption, parse_mode='md')
+            await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
         
         # Cleanup poster temp file
         if poster_path and os.path.exists(poster_path):
             os.remove(poster_path)
         
-        status_msg = await client.send_message(chat_id, "📤 Ekstraksi Thumbnail & Durasi Video...")
+        status_msg = await client.send_message(chat_id, "📤 Ekstraksi Thumbnail & Durasi Video...", reply_to=topic_id)
         
         # 2. Extract Duration & Dimensions (Fallback directly if fails)
         duration = 0
@@ -94,6 +129,7 @@ async def upload_drama(client: TelegramClient, chat_id: int,
             )
         ]
         
+        start_time = time.time()
         await client.send_file(
             chat_id,
             video_path,
@@ -101,8 +137,9 @@ async def upload_drama(client: TelegramClient, chat_id: int,
             force_document=False, # FORCE IT AS VIDEO STREAM
             thumb=thumb_path,
             attributes=video_attributes,
-            progress_callback=lambda c, t: upload_progress(c, t, status_msg, "Upload Video:"),
-            supports_streaming=True
+            progress_callback=lambda c, t: upload_progress(c, t, status_msg, title, start_time, episodes_count),
+            supports_streaming=True,
+            reply_to=topic_id
         )
         
         await status_msg.delete()

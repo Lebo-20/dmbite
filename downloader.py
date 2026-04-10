@@ -56,7 +56,7 @@ async def download_m3u8(url: str, path: str, retries: int = 3):
             
     return False
 
-async def download_all_episodes(episodes, download_dir: str, semaphore_count: int = 5):
+async def download_all_episodes(episodes, download_dir: str, semaphore_count: int = 5, progress_callback=None):
     """
     Downloads all episodes concurrently using FFmpeg for m3u8 support.
     Returns (success_count, total_count).
@@ -64,8 +64,12 @@ async def download_all_episodes(episodes, download_dir: str, semaphore_count: in
     os.makedirs(download_dir, exist_ok=True)
     semaphore = asyncio.Semaphore(semaphore_count)
     total_count = len(episodes)
+    completed_count = 0
+    success_count = 0
+    lock = asyncio.Lock()
 
     async def limited_download(ep):
+        nonlocal completed_count, success_count
         async with semaphore:
             # Sort episodes by vid or episode number
             vid = ep.get('vid') or ep.get('episode') or 'unk'
@@ -103,10 +107,16 @@ async def download_all_episodes(episodes, download_dir: str, semaphore_count: in
                 logger.info(f"✅ Downloaded {filename}")
             else:
                 logger.error(f"❌ Failed to download {filename} after all attempts.")
+            
+            async with lock:
+                completed_count += 1
+                if success: success_count += 1
+                if progress_callback:
+                    await progress_callback(completed_count, total_count)
+                    
             return success
 
-    results = await asyncio.gather(*(limited_download(ep) for ep in episodes))
-    success_count = sum(1 for r in results if r)
+    await asyncio.gather(*(limited_download(ep) for ep in episodes))
     return success_count, total_count
 
 async def download_file_inner(client, url, path, retries: int = 2):
