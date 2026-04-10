@@ -370,6 +370,13 @@ async def auto_mode_loop():
 if __name__ == '__main__':
     logger.info("Initializing DramaBite Auto-Bot...")
     
+    # Bersihkan folder temp lama saat startup agar tidak menumpuk
+    base_temp = os.path.join(os.getcwd(), "temp")
+    if os.path.exists(base_temp):
+        logger.info("🧹 Membersihkan folder temp lama...")
+        shutil.rmtree(base_temp, ignore_errors=True)
+    os.makedirs(base_temp, exist_ok=True)
+    
     # Start auto loop and keep the client running
     client.loop.create_task(auto_mode_loop())
     
