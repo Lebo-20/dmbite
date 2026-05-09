@@ -129,7 +129,7 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
         from merge import merge_episodes, check_and_prepare_files
         merged_video_path = os.path.join(temp_dir, f"{title}.mp4")
         # merge_episodes returns the combined path
-        result_path = merge_episodes(video_dir, title)
+        result_path = merge_episodes(video_dir, merged_video_path)
         
         if not result_path or not os.path.exists(result_path):
             await client.send_message(admin_id, f"❌ {tag} **{title}** GAGAL pada tahap **MERGING**.")
