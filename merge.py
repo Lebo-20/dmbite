@@ -53,30 +53,33 @@ def merge_episodes(video_dir: str, output_path: str):
 # Hapus kompresi, ganti dengan Split tanpa re-encode
 def check_and_prepare_files(video_path: str):
     """
-    Cek jika file lebih dari 1.9 GB, jika ya, split menjadi beberapa bagian tanpa re-encode.
+    Cek jika file lebih dari 1.99 GB, jika ya, split menjadi beberapa bagian tanpa re-encode.
     Menggunakan mode segment agar cepat dan kualitas tetap asli.
     Returns: List of file paths to upload.
     """
     try:
         size_bytes = os.path.getsize(video_path)
-        limit_bytes = 1900 * 1024 * 1024 # 1.9 GB
+        # 1.99 GB = 1.99 * 1024 * 1024 * 1024 bytes
+        limit_bytes = int(1.99 * 1024 * 1024 * 1024) 
         
         if size_bytes <= limit_bytes:
             return [video_path]
             
-        logger.warning(f"⚠️ File terlalu besar ({size_bytes / (1024**3):.2f} GB). Memecah menjadi beberapa bagian (Tanpa Re-encode)...")
+        logger.warning(f"⚠️ File terlalu besar ({size_bytes / (1024**3):.2f} GB). Memecah menjadi bagian-bagian 1.99GB (Tanpa Re-encode)...")
         
-        # Nama dasar: "Judul Drama.mp4" -> "Judul Drama - Part %d.mp4"
+        # Nama dasar untuk part: "Drama.mp4" -> "Drama - Part %d.mp4"
+        # Kita gunakan format yang konsisten untuk dideteksi nanti
         output_pattern = video_path.replace(".mp4", " - Part %01d.mp4")
         
-        # Hitung estimasi waktu split per 1.9GB 
-        # (Kita gunakan duration-based split atau size-based)
-        # Cara termudah tanpa re-encode adalah menggunakan -f segment
+        # Gunakan segment_size untuk memecah berdasarkan ukuran
+        # Note: ffmpeg akan memecah pada keyframe terdekat SETELAH ukuran tercapai
         command = [
             "ffmpeg", "-y", "-i", video_path,
             "-c", "copy", "-map", "0",
-            "-f", "segment", "-segment_time", "3600", # Split per 1 jam (estimasi aman untuk < 2GB)
+            "-f", "segment", 
+            "-segment_size", "1990M", # 1.99 GB per part
             "-reset_timestamps", "1",
+            "-initial_offset", "0",
             output_pattern
         ]
         
@@ -84,15 +87,19 @@ def check_and_prepare_files(video_path: str):
         if process.returncode == 0:
             # Cari file hasil part
             base_dir = os.path.dirname(video_path)
-            base_name = os.path.basename(video_path).replace(".mp4", " - Part")
-            parts = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.startswith(base_name)]
+            # Ambil nama file tanpa ekstensi untuk mencocokkan pattern
+            name_no_ext = os.path.basename(video_path).replace(".mp4", "")
+            base_name_pattern = f"{name_no_ext} - Part"
+            
+            parts = [os.path.join(base_dir, f) for f in os.listdir(base_dir) if f.startswith(base_name_pattern)]
             parts.sort()
             
             if parts:
                 os.remove(video_path) # Hapus file raksasa asli
-                logger.info(f"✅ Berhasil memecah menjadi {len(parts)} bagian.")
+                logger.info(f"✅ Berhasil memecah menjadi {len(parts)} bagian berdasarkan ukuran.")
                 return parts
         
+        logger.error(f"Gagal memecah file: {process.stderr}")
         return [video_path] # Balikkan asli jika gagal
     except Exception as e:
         logger.error(f"Error during splitting: {e}")
