@@ -41,10 +41,10 @@ def merge_episodes(video_dir: str, output_path: str):
         
         if process.returncode == 0:
             logger.info(f"✅ Berhasil Merge Cepat: {output_path}")
-            return check_and_prepare_files(output_path)
+            return output_path
         else:
             logger.error(f"❌ MERGE GAGAL: Video tidak bisa digabung secara langsung.\nError: {process.stderr}")
-            return []
+            return None
             
     except Exception as e:
         logger.error(f"💥 Error fatal saat merge: {e}")
