@@ -38,7 +38,7 @@ async def run_test():
         
         # Force process 
         success = await process_drama_full(
-            '10960', 
+            '11912', 
             admin_id, 
             target_chat=auto_channel, 
             target_topic=topic_id

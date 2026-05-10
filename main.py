@@ -88,8 +88,8 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             return False
             
         title = drama.get('title') or drama.get('name') or f"Drama_{book_id}"
-        description = drama.get('description') or "-"
-        poster = drama.get('horizontal_poster') or drama.get('vertical_poster')
+        description = drama.get('description') or drama.get('desc') or "-"
+        poster = drama.get('horizontal_poster') or drama.get('vertical_poster') or drama.get('cover') or drama.get('cover_url')
         
         BotState.current_task = title
 

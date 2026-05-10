@@ -75,7 +75,7 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         # 1. Send Poster + Description (Only if not skipping)
         if not skip_metadata:
             # Format Caption yang lebih lengkap
-            ep_info = f"\n🎞 **Total Episode:** {episodes_count}" if episodes_count else ""
+            ep_info = f"\n📂 **Total Episode:** {episodes_count}" if episodes_count else ""
             clean_desc = description.strip() if description and description.strip() != "-" else "Tidak ada sinopsis."
             caption = f"🎬 **{title}**{ep_info}\n\n📝 **Sinopsis:**\n{clean_desc[:800]}..."
             
