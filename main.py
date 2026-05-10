@@ -88,7 +88,16 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             return False
             
         title = drama.get('title') or drama.get('name') or f"Drama_{book_id}"
-        description = drama.get('description') or drama.get('desc') or "-"
+        
+        # Enhanced Description logic
+        description = drama.get('description') or drama.get('desc')
+        if not description or description.strip() == "-" or description.strip() == "":
+            tags = drama.get('tags', [])
+            if tags:
+                description = "Genre: " + ", ".join(tags)
+            else:
+                description = "-"
+        
         poster = drama.get('horizontal_poster') or drama.get('vertical_poster') or drama.get('cover') or drama.get('cover_url')
         
         BotState.current_task = title
@@ -146,7 +155,7 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             is_first_part = (i == 0)
             part_num = (i + 1) if len(merged_files) > 1 else None
             
-            upload_success = await upload_drama(
+            upload_success, upload_error = await upload_drama(
                 client, target_chat, title, description, poster, file_path, 
                 topic_id=target_topic, episodes_count=len(episodes),
                 skip_metadata=not is_first_part,
@@ -154,6 +163,7 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             )
             if not upload_success:
                 overall_success = False
+                error_msg = upload_error
                 break
         
         if overall_success:
@@ -161,7 +171,7 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             await status_msg.edit(f"✅ {tag} **{title}** BERHASIL di-upload!")
             return True
         else:
-            await client.send_message(admin_id, f"❌ {tag} **{title}** GAGAL pada tahap **UPLOADING**.")
+            await client.send_message(admin_id, f"❌ {tag} **{title}** GAGAL pada tahap **UPLOADING**.\nError: `{error_msg}`")
             return False
 
     except Exception as e:

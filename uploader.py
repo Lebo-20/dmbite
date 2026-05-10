@@ -71,6 +71,7 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         except:
             topic_id = None
 
+    metadata_msg = None
     try:
         # 1. Send Poster + Description (Only if not skipping)
         if not skip_metadata:
@@ -98,19 +99,30 @@ async def upload_drama(client: TelegramClient, chat_id: int,
             poster_to_send = poster_path or None
             try:
                 if poster_to_send:
-                    await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
+                    metadata_msg = await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
                 else:
                     # Kirim teks saja jika poster gagal total
-                    await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
+                    metadata_msg = await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
             except Exception as e:
                 logger.error(f"Failed to send poster: {e}")
-                await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
+                metadata_msg = await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
             
             if poster_path and os.path.exists(poster_path):
                 os.remove(poster_path)
         
         # 2. Prepare Video Upload
         part_info = f" (Part {part_number})" if part_number else ""
+        
+        # Check file size
+        if not os.path.exists(video_path):
+            return False, f"Video file not found at {video_path}"
+            
+        file_size = os.path.getsize(video_path)
+        logger.info(f"Preparing to upload {video_path} (Size: {file_size / (1024*1024):.2f} MB)")
+        
+        if file_size == 0:
+            return False, "Video file is empty (0 bytes)"
+
         status_msg = await client.send_message(chat_id, f"📤 Menyiapkan video{part_info}...", reply_to=topic_id)
         
         # Metadata extraction
@@ -147,15 +159,20 @@ async def upload_drama(client: TelegramClient, chat_id: int,
         for attempt in range(1, max_retries + 1):
             try:
                 await status_msg.edit(f"📤 Uploading {display_title}... (Attempt {attempt}/{max_retries})")
+            except:
+                pass
                 
-                video_attributes = [
-                    DocumentAttributeVideo(
-                        duration=duration,
-                        w=width,
-                        h=height,
-                        supports_streaming=True
+            try:
+                video_attributes = []
+                if duration > 0:
+                    video_attributes.append(
+                        DocumentAttributeVideo(
+                            duration=duration,
+                            w=width,
+                            h=height,
+                            supports_streaming=True
+                        )
                     )
-                ]
                 
                 start_time = time.time()
                 await client.send_file(
@@ -167,13 +184,14 @@ async def upload_drama(client: TelegramClient, chat_id: int,
                     attributes=video_attributes,
                     progress_callback=lambda c, t: upload_progress(c, t, status_msg, display_title, start_time, episodes_count),
                     supports_streaming=True,
-                    reply_to=topic_id
+                    reply_to=topic_id,
+                    file_size=file_size # Provide file size to help Telethon
                 )
                 upload_success = True
                 break
             except Exception as e:
-                last_error = str(e)
-                logger.error(f"Upload attempt {attempt} failed for {display_title}: {e}")
+                last_error = f"{type(e).__name__}: {str(e)}"
+                logger.error(f"Upload attempt {attempt} failed for {display_title}: {last_error}")
                 if attempt < max_retries:
                     await asyncio.sleep(5)
         
@@ -183,13 +201,29 @@ async def upload_drama(client: TelegramClient, chat_id: int,
             
         if upload_success:
             logger.info(f"Successfully uploaded {display_title}")
-            return True
+            return True, None
         else:
-            logger.error(f"All upload attempts failed for {display_title}. Last error: {last_error}")
-            return False
+            # Hapus metadata jika upload video gagal total
+            if metadata_msg:
+                try:
+                    await metadata_msg.delete()
+                    logger.info("Deleted metadata message due to upload failure.")
+                except:
+                    pass
+                    
+            err_msg = f"All upload attempts failed for {display_title}. Last error: {last_error}"
+            logger.error(err_msg)
+            return False, err_msg
             
     except Exception as e:
-        logger.error(f"Critical error in upload_drama: {e}")
-        return False
+        # Hapus metadata jika terjadi error kritikal
+        if metadata_msg:
+            try:
+                await metadata_msg.delete()
+            except:
+                pass
+        err_msg = f"Critical error in upload_drama: {e}"
+        logger.error(err_msg)
+        return False, err_msg
 
 
