@@ -74,26 +74,33 @@ async def upload_drama(client: TelegramClient, chat_id: int,
     try:
         # 1. Send Poster + Description (Only if not skipping)
         if not skip_metadata:
-            caption = f"🎬 **{title}**\n\n📝 **Sinopsis:**\n{description[:800]}..."
+            # Format Caption yang lebih lengkap
+            ep_info = f"\n🎞 **Total Episode:** {episodes_count}" if episodes_count else ""
+            clean_desc = description.strip() if description and description.strip() != "-" else "Tidak ada sinopsis."
+            caption = f"🎬 **{title}**{ep_info}\n\n📝 **Sinopsis:**\n{clean_desc[:800]}..."
             
             import httpx
             poster_path = None
             try:
                 if poster_url and poster_url.startswith("http"):
-                    async with httpx.AsyncClient(timeout=30) as http_client:
+                    logger.info(f"Downloading poster from {poster_url}...")
+                    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http_client:
                         resp = await http_client.get(poster_url)
                         if resp.status_code == 200:
                             poster_path = os.path.join(tempfile.gettempdir(), f"poster_{int(time.time())}.jpg")
                             with open(poster_path, "wb") as pf:
                                 pf.write(resp.content)
+                else:
+                    logger.warning("Poster URL is invalid or empty.")
             except Exception as e:
                 logger.warning(f"Failed to download poster: {e}")
             
-            poster_to_send = poster_path or poster_url
+            poster_to_send = poster_path or None
             try:
                 if poster_to_send:
                     await client.send_message(chat_id, caption, file=poster_to_send, parse_mode='md', reply_to=topic_id)
                 else:
+                    # Kirim teks saja jika poster gagal total
                     await client.send_message(chat_id, caption, parse_mode='md', reply_to=topic_id)
             except Exception as e:
                 logger.error(f"Failed to send poster: {e}")
