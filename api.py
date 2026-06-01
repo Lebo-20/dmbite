@@ -19,7 +19,7 @@ def get_client() -> httpx.AsyncClient:
             "Accept-Language": "en-US,en;q=0.9",
             "Connection": "keep-alive",
         }
-        _client = httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=True)
+        _client = httpx.AsyncClient(timeout=60, headers=headers, follow_redirects=True)
     return _client
 
 async def get_drama_detail(book_id: str):
