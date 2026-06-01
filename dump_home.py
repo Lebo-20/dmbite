@@ -3,7 +3,7 @@ import httpx
 import json
 
 async def dump_home_item():
-    url = "https://dramabite.dramabos.my.id/home"
+    url = "https://dramabite.dramabos.online/home"
     params = {"lang": "id"}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(url, params=params)
