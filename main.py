@@ -175,7 +175,7 @@ async def process_drama_full(book_id, admin_id, target_chat=None, target_topic=N
             return False
 
     except Exception as e:
-        logger.error(f"Process Error: {e}")
+        logger.exception("Process Error:")
         if status_msg: await status_msg.edit(f"❌ {tag} Terjadi kesalahan: {e}")
         return False
     finally:
