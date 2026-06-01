@@ -14,7 +14,11 @@ async def get_drama_detail(book_id: str):
         try:
             response = await client.get(url, params=params)
             response.raise_for_status()
-            return response.json()
+            data = response.json()
+            if isinstance(data, dict) and "error" in data:
+                logger.error(f"API returned error for drama detail of {book_id}: {data['error']}")
+                return None
+            return data
         except Exception as e:
             logger.error(f"Error fetching drama detail for {book_id}: {e}")
             return None
@@ -26,8 +30,14 @@ async def get_all_episodes(book_id: str):
         try:
             response = await client.get(url, params=params)
             response.raise_for_status()
-            # DramaBite returns a list of episodes directly
-            return response.json()
+            data = response.json()
+            if isinstance(data, dict) and "error" in data:
+                logger.error(f"API returned error for episodes of {book_id}: {data['error']}")
+                return []
+            if not isinstance(data, list):
+                logger.error(f"API returned unexpected data type for episodes of {book_id}: {type(data)}")
+                return []
+            return data
         except Exception as e:
             logger.error(f"Error fetching episodes for {book_id}: {e}")
             return []
