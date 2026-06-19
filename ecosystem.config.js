@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: "dramabite-bot",
-      script: "python3",
+      script: "/root/dmbite/venv/bin/python3",
       args: "main.py",
       autorestart: true,
       watch: false,
