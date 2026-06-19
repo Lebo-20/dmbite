@@ -67,6 +67,9 @@ async def worker():
         
         try:
             await process_drama_full(book_id, admin_id, target_chat=AUTO_CHANNEL, target_topic=TOPIC_ID, is_manual=is_manual)
+            if not is_manual:
+                logger.info("💤 Cooldown 30 minutes after auto process...")
+                await asyncio.sleep(30 * 60)
         except Exception as e:
             logger.error(f"Worker error on {book_id}: {e}")
         finally:
@@ -276,7 +279,7 @@ async def auto_scan_loop():
         except Exception as e:
             logger.error(f"Auto-Scan Error: {e}")
         
-        await asyncio.sleep(1800) # 30 mins
+        await asyncio.sleep(7200) # 2 hours
 
 if __name__ == '__main__':
     if sys.platform == 'win32':
